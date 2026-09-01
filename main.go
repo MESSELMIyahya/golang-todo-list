@@ -21,7 +21,8 @@ const (
 	UNCOMPLETE_COMMAND     = "uncomplete" // needs the task number
 	CLEAR_COMMAND          = "clear"      // clears the screen
 	CLEAR_COMMAND2         = "cls"        // clears the screen (for windows users)
-	EXIST_COMMAND          = "exit"       // clears the screen
+	EXIT_COMMAND           = "exit"       // exits the program
+	HELP_COMMAND           = "help"       // prints all commands
 )
 
 var (
@@ -41,14 +42,7 @@ type Task struct {
 func main() {
 
 	// tasks slice
-	tasksList := &[]Task{
-		{content: "initial task", completed: true, createdAt: time.Now(), updatedAt: time.Now(), completedAt: time.Now()},
-		{content: "Make mony", completed: false, createdAt: time.Now(), updatedAt: time.Now()},
-		{content: "writer the newsletter", completed: false, createdAt: time.Now(), updatedAt: time.Now()},
-		{content: "pack the car", completed: true, createdAt: time.Now(), updatedAt: time.Now(), completedAt: time.Now()},
-		{content: "buying a domainname", completed: false, createdAt: time.Now(), updatedAt: time.Now()},
-		{content: "go the gym", completed: true, createdAt: time.Now(), updatedAt: time.Now(), completedAt: time.Now()},
-	}
+	tasksList := &[]Task{}
 
 	fmt.Println(tasksList)
 	renderUI(tasksList)
@@ -90,13 +84,15 @@ func printUIHeader() {
 	fmt.Println("============= Welcome To Task Tracker App =============")
 	fmt.Println("== list: to list all tasks ")
 	fmt.Println("== list-completed: to list all completed tasks ")
-	fmt.Println("== create 'Your Task Info': to create a new task ")
-	fmt.Println("== update 'task-number-id' 'Your Task Info': to update an existing task ")
-	fmt.Println("== complete 'task-number-id' : to mark a task as completed")
-	fmt.Println("== uncomplete 'task-number-id' : to mark a task as uncompleted")
+	fmt.Println("== create: 'Your Task Info': to create a new task ")
+	fmt.Println("== update: 'task-number-id' 'Your Task Info': to update an existing task ")
+	fmt.Println("== complete: 'task-number-id' : to mark a task as completed")
+	fmt.Println("== uncomplete: 'task-number-id' : to mark a task as uncompleted")
+	fmt.Println("== delete: 'task-number-id' : to delete a task")
 	fmt.Println("=======================================================")
-	fmt.Println("== clear : to clear the CLI")
-	fmt.Println("== exist : to exist the program")
+	fmt.Println("== clear/cls: to clear the CLI")
+	fmt.Println("== exit: to exit the program")
+	fmt.Println("== help: all commands")
 	fmt.Println("=======================================================")
 }
 
@@ -120,6 +116,10 @@ func renderUI(tasks *[]Task) {
 		return
 	}
 
+	fmt.Print("\n")
+	// printing the app ui header
+	printUIHeader()
+
 	for running {
 		// checking global errors
 		if errored {
@@ -136,18 +136,23 @@ func renderUI(tasks *[]Task) {
 			break
 		}
 
-		fmt.Print("\n")
-		// clearUI()
-		// printing the app ui header
-		printUIHeader()
-
 		command := renderInputAndGetInput()
+
+		// clearing the ui
+		clearUI()
 
 		if command == CLEAR_COMMAND || command == CLEAR_COMMAND2 {
 			clearUI()
 			fmt.Println("======================= Cleared =======================")
 
 		} else if command == LIST_COMMAND { // Listing Tasks
+
+			if len(*tasks) == 0 {
+				fmt.Println("========================================================")
+				fmt.Println("===              No tasks yet, Add new               ===")
+				fmt.Println("========================================================")
+				continue
+			}
 
 			for idx, task := range *tasks {
 
@@ -159,7 +164,7 @@ func renderUI(tasks *[]Task) {
 					completedStr = "Pending"
 				}
 
-				fmt.Print("\n", idx+1, " - ", task.content, " (", completedStr, ")", " (", task.updatedAt.Format(time.RFC822), ")", "\n")
+				fmt.Print(idx+1, " - ", task.content, " (", completedStr, ")", " (", task.updatedAt.Format(time.RFC822), ")", "\n")
 			}
 
 		} else if command == LIST_COMPLETED_COMMAND { // Listing Completed Tasks
@@ -172,7 +177,7 @@ func renderUI(tasks *[]Task) {
 
 				completeDate := task.completedAt.Format(time.RFC822)
 
-				fmt.Print("\n", idx+1, " - ", task.content, " (", completeDate, ")", "\n")
+				fmt.Print(idx+1, " - ", task.content, " (", completeDate, ")", "\n")
 			}
 
 		} else if isCreateCmd := strings.HasPrefix(command, CREATE_COMMAND+" "); isCreateCmd { // create task
@@ -320,10 +325,17 @@ func renderUI(tasks *[]Task) {
 
 			fmt.Printf("\n======= Task %v Was Deleted  =======\n", parsedSelectedId)
 
-		} else if command == EXIST_COMMAND { // existing
+		} else if command == EXIT_COMMAND { // existing
 			clearUI()
 			running = false
 			break
+		} else if command == HELP_COMMAND { // help
+			clearUI()
+			printUIHeader()
+		} else {
+			fmt.Println("========================================================")
+			fmt.Println("===          Type 'help' for all commands            ===")
+			fmt.Println("========================================================")
 		}
 
 	}
