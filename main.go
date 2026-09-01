@@ -2,6 +2,8 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -14,15 +16,16 @@ import (
 const (
 	LIST_COMMAND           = "list"
 	LIST_COMPLETED_COMMAND = "list-completed"
-	CREATE_COMMAND         = "create"     // needs the content
-	UPDATE_COMMAND         = "update"     // needs the task number
-	DELETE_COMMAND         = "delete"     // needs the task number
-	COMPLETE_COMMAND       = "complete"   // needs the task number
-	UNCOMPLETE_COMMAND     = "uncomplete" // needs the task number
-	CLEAR_COMMAND          = "clear"      // clears the screen
-	CLEAR_COMMAND2         = "cls"        // clears the screen (for windows users)
-	EXIT_COMMAND           = "exit"       // exits the program
-	HELP_COMMAND           = "help"       // prints all commands
+	CREATE_COMMAND         = "create"       // needs the content
+	UPDATE_COMMAND         = "update"       // needs the task number
+	DELETE_COMMAND         = "delete"       // needs the task number
+	COMPLETE_COMMAND       = "complete"     // needs the task number
+	UNCOMPLETE_COMMAND     = "uncomplete"   // needs the task number
+	CLEAR_COMMAND          = "clear"        // clears the screen
+	CLEAR_COMMAND2         = "cls"          // clears the screen (for windows users)
+	EXIT_COMMAND           = "exit"         // exits the program
+	HELP_COMMAND           = "help"         // prints all commands
+	DATA_FILE_PATH         = "./tasks.json" // the dat file path
 )
 
 var (
@@ -32,17 +35,17 @@ var (
 // todo item Struct
 
 type Task struct {
-	content     string
-	completed   bool
-	createdAt   time.Time
-	updatedAt   time.Time
-	completedAt time.Time
+	Content     string    `json:"content"`
+	Completed   bool      `json:"isCompleted"`
+	CreatedAt   time.Time `json:"createAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+	CompletedAt time.Time `json:"completedAt"`
 }
 
 func main() {
 
 	// tasks slice
-	tasksList := &[]Task{}
+	tasksList := handleInitializeTasksFromFile()
 
 	fmt.Println(tasksList)
 	renderUI(tasksList)
@@ -79,7 +82,6 @@ func clearUI() {
 }
 
 // UI render functions
-
 func printUIHeader() {
 	fmt.Println("============= Welcome To Task Tracker App =============")
 	fmt.Println("== list: to list all tasks ")
@@ -158,38 +160,41 @@ func renderUI(tasks *[]Task) {
 
 				completedStr := ""
 
-				if task.completed {
+				if task.Completed {
 					completedStr = "Completed"
 				} else {
 					completedStr = "Pending"
 				}
 
-				fmt.Print(idx+1, " - ", task.content, " (", completedStr, ")", " (", task.updatedAt.Format(time.RFC822), ")", "\n")
+				fmt.Print(idx+1, " - ", task.Content, " (", completedStr, ")", " (", task.UpdatedAt.Format(time.RFC822), ")", "\n")
 			}
 
 		} else if command == LIST_COMPLETED_COMMAND { // Listing Completed Tasks
 
 			for idx, task := range *tasks {
 
-				if !task.completed {
+				if !task.Completed {
 					continue
 				}
 
-				completeDate := task.completedAt.Format(time.RFC822)
+				completeDate := task.CompletedAt.Format(time.RFC822)
 
-				fmt.Print(idx+1, " - ", task.content, " (", completeDate, ")", "\n")
+				fmt.Print(idx+1, " - ", task.Content, " (", completeDate, ")", "\n")
 			}
 
 		} else if isCreateCmd := strings.HasPrefix(command, CREATE_COMMAND+" "); isCreateCmd { // create task
 
 			*tasks = append(*tasks, Task{
-				content:   strings.TrimSpace(strings.TrimPrefix(command, CREATE_COMMAND)),
-				createdAt: time.Now(),
-				completed: false,
-				updatedAt: time.Now(),
+				Content:   strings.TrimSpace(strings.TrimPrefix(command, CREATE_COMMAND)),
+				CreatedAt: time.Now(),
+				Completed: false,
+				UpdatedAt: time.Now(),
 			})
 
 			fmt.Println("================== New Task Created ===================")
+
+			// backing up data
+			handleBackupData(DATA_FILE_PATH, tasks)
 		} else if isUpdateCmd := strings.HasPrefix(command, UPDATE_COMMAND+" "); isUpdateCmd { // update task by id with handling edge-cases
 
 			resolvedStr := strings.TrimSpace(strings.TrimPrefix(command, UPDATE_COMMAND))
@@ -218,14 +223,17 @@ func renderUI(tasks *[]Task) {
 			newContent := strings.TrimSpace(strings.Join(strings.Split(resolvedStr, " ")[1:], " ")) // splitting excluding the ID and joining and trimming the space
 
 			(*tasks)[int(parsedSelectedId)-1] = Task{
-				content:     newContent,
-				updatedAt:   time.Now(),
-				createdAt:   selectedTask.createdAt,
-				completedAt: selectedTask.completedAt,
-				completed:   selectedTask.completed,
+				Content:     newContent,
+				UpdatedAt:   time.Now(),
+				CreatedAt:   selectedTask.CreatedAt,
+				CompletedAt: selectedTask.CompletedAt,
+				Completed:   selectedTask.Completed,
 			}
 
 			fmt.Printf("\n================ Task %v Was Updated =================\n", parsedSelectedId)
+
+			// backing up data
+			handleBackupData(DATA_FILE_PATH, tasks)
 		} else if isCompleteCmd := strings.HasPrefix(command, COMPLETE_COMMAND+" "); isCompleteCmd { // set task as completed by id with handling edge-cases
 
 			resolvedStr := strings.TrimSpace(strings.TrimPrefix(command, COMPLETE_COMMAND))
@@ -252,14 +260,17 @@ func renderUI(tasks *[]Task) {
 			selectedTask := (*tasks)[int(parsedSelectedId)-1]
 
 			(*tasks)[int(parsedSelectedId)-1] = Task{
-				content:     selectedTask.content,
-				updatedAt:   time.Now(),
-				createdAt:   selectedTask.createdAt,
-				completedAt: time.Now(),
-				completed:   true,
+				Content:     selectedTask.Content,
+				UpdatedAt:   time.Now(),
+				CreatedAt:   selectedTask.CreatedAt,
+				CompletedAt: time.Now(),
+				Completed:   true,
 			}
 
 			fmt.Printf("\n========== Task %v Was Marked As Completed ===========\n", parsedSelectedId)
+
+			// backing up data
+			handleBackupData(DATA_FILE_PATH, tasks)
 
 		} else if isUncompleteCmd := strings.HasPrefix(command, UNCOMPLETE_COMMAND+" "); isUncompleteCmd { // set task as uncompleted by id with handling edge-cases
 
@@ -288,15 +299,17 @@ func renderUI(tasks *[]Task) {
 
 			(*tasks)[int(parsedSelectedId)-1] = Task{
 
-				content:     selectedTask.content,
-				updatedAt:   time.Now(),
-				createdAt:   selectedTask.createdAt,
-				completedAt: time.Time{}, // resetting the time
-				completed:   false,
+				Content:     selectedTask.Content,
+				UpdatedAt:   time.Now(),
+				CreatedAt:   selectedTask.CreatedAt,
+				CompletedAt: time.Time{}, // resetting the time
+				Completed:   false,
 			}
 
 			fmt.Printf("\n======= Task %v Was Marked As Uncompleted =======\n", parsedSelectedId)
 
+			// backing up data
+			handleBackupData(DATA_FILE_PATH, tasks)
 		} else if isDeleteCmd := strings.HasPrefix(command, DELETE_COMMAND+" "); isDeleteCmd { // delete task by id with handling edge-cases
 
 			resolvedStr := strings.TrimSpace(strings.TrimPrefix(command, DELETE_COMMAND))
@@ -324,7 +337,8 @@ func renderUI(tasks *[]Task) {
 			*tasks = append((*tasks)[:int(parsedSelectedId-1)], (*tasks)[int(parsedSelectedId):]...)
 
 			fmt.Printf("\n======= Task %v Was Deleted  =======\n", parsedSelectedId)
-
+			// backing up data
+			handleBackupData(DATA_FILE_PATH, tasks)
 		} else if command == EXIT_COMMAND { // existing
 			clearUI()
 			running = false
@@ -355,4 +369,98 @@ func renderInputAndGetInput() string {
 	handleError(err)
 
 	return strings.TrimSpace(strings.Trim(input, "\n"))
+}
+
+// handle handleInitializeTasksFromFile
+
+func handleInitializeTasksFromFile() *[]Task {
+
+	// reading the data file content and returns the list
+	list := handleReadFileAndInitializationData(DATA_FILE_PATH)
+
+	return list
+}
+
+func handleReadFileAndInitializationData(path string) *[]Task {
+
+	uncodedFileBytes, err := os.ReadFile(path)
+
+	if err != nil {
+		// if the error isn't os.ErrNotExist
+		if !errors.Is(err, os.ErrNotExist) {
+			// printing error
+			fmt.Println("=======================================================")
+			fmt.Println("=== Something Went Wrong Went Loading The File Data ===")
+			fmt.Println("=======================================================")
+
+			panic(err)
+		}
+
+		// default tasks list
+		defaultList := &[]Task{
+			{
+				Content:     "Your First Task :)",
+				Completed:   false,
+				CreatedAt:   time.Now(),
+				UpdatedAt:   time.Now(),
+				CompletedAt: time.Time{},
+			},
+		}
+
+		// else creating and initializing the file with default tasks
+		handleBackupData(path, defaultList)
+
+		return defaultList
+	}
+
+	return validatingAndConvertingTasksDataFile(uncodedFileBytes)
+}
+
+func validatingAndConvertingTasksDataFile(content []byte) *[]Task {
+
+	// validating the json format of the tasks
+	isValidJson := json.Valid(content)
+
+	if !isValidJson {
+		// printing error
+		fmt.Println("=======================================================")
+		fmt.Println("=== Something Went Wrong Went Loading The File Data ===")
+		fmt.Println("=======================================================")
+
+		panic("Content Of The File Isn't Valid")
+	}
+
+	list := &[]Task{}
+
+	json.Unmarshal(content, list)
+
+	return list
+}
+
+// handles backup data (a func that backups the data into the data file)
+func handleBackupData(path string, tasks *[]Task) {
+
+	// encoding the tasks as json
+	encodedJson, err := json.Marshal(*tasks)
+
+	if err != nil {
+		// printing error
+		fmt.Println("=====================================================")
+		fmt.Println("===== Something Went Wrong When Backing Up Data =====")
+		fmt.Println("=====================================================")
+
+		panic("Error When Backing Up Data Info The File")
+	}
+
+	// writing to the file (will create the file it doesn't exist)
+	writerErr := os.WriteFile(path, encodedJson, 0666)
+
+	if writerErr != nil {
+		// printing error
+		fmt.Println("=====================================================")
+		fmt.Println("===== Something Went Wrong When Backing Up Data =====")
+		fmt.Println("=====================================================")
+
+		panic("Error When Backing Up Data Info The File")
+	}
 }
